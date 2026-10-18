@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>하늘시계</title>
+<meta name="description" content="무지개다리를 건넌 날부터 보호자 120세까지를 하늘의 1시간으로 환산해 보여줍니다.">
+<meta name="theme-color" content="#edf0f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e1219" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="하늘시계">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: 밝은 라벤더 하늘 위에 미니멀 스톱워치 문자판 하나. 가운데 원은 반려동물 사진, 바늘 한 바퀴 = 하늘의 1시간.
+   그 아래로 이름, 남은 시간, 기록이 한 컬럼으로 이어진다. */
+:root {
+  --bg: #f7f7fb;
+  --blob-a: #dfe4ff;
+  --blob-b: #ece4fb;
+  --surface: #ffffff;
+  --ink: #15161c;
+  --muted: #6b6e7b;
+  --line: #e2e2ea;
+  --tick: #d3d4dd;
+  --tick-major: #1d1e26;
+  --face: #ffffff;
+  --face-edge: rgba(30, 30, 60, 0.07);
+  --accent: #5b5ee0;
+  --accent-soft: rgba(91, 94, 224, 0.14);
+  --accent-ink: #ffffff;
+  --warn: #c2412f;
+  --font-display: "IBM Plex Sans KR", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "IBM Plex Sans KR", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --radius: 18px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101119; --blob-a: #1c2150; --blob-b: #261c45; --surface: #1a1b26; --ink: #eceef5; --muted: #9a9daa;
+    --line: #2a2c3a; --tick: #3a3c4c; --tick-major: #e6e8f0; --face: #1a1b26; --face-edge: rgba(255, 255, 255, 0.06);
+    --accent: #8e90ff; --accent-soft: rgba(142, 144, 255, 0.18); --accent-ink: #101119; --warn: #f08b77; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101119; --blob-a: #1c2150; --blob-b: #261c45; --surface: #1a1b26; --ink: #eceef5; --muted: #9a9daa;
+  --line: #2a2c3a; --tick: #3a3c4c; --tick-major: #e6e8f0; --face: #1a1b26; --face-edge: rgba(255, 255, 255, 0.06);
+  --accent: #8e90ff; --accent-soft: rgba(142, 144, 255, 0.18); --accent-ink: #101119; --warn: #f08b77; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { min-height: 100%; }
+body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(60% 40% at 0% 45%, var(--blob-a), transparent 70%),
+    radial-gradient(70% 45% at 100% 70%, var(--blob-b), transparent 70%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-font-smoothing: antialiased;
+  min-height: 100%;
+}
+.app { max-width: 440px; margin-inline: auto; padding-block: 8px 48px; display: flex; flex-direction: column; gap: 22px; }
+.stack { display: flex; flex-direction: column; gap: 22px; }
+
+button, .btn {
+  font: inherit; font-size: 14px; font-weight: 500; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  padding: 9px 16px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  transition: border-color .15s, background .15s;
+}
+button:hover, .btn:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible, textarea:focus-visible, .btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn-primary:hover { filter: brightness(1.06); }
+.btn-ghost { background: transparent; }
+
+/* 상단: 메뉴 버튼만 */
+.top { display: flex; justify-content: flex-end; position: relative; min-height: 44px; }
+.kebab { width: 44px; height: 44px; padding: 0; border: none; background: transparent; border-radius: 50%; }
+.kebab:hover { background: var(--accent-soft); }
+.kebab svg { width: 22px; height: 22px; fill: var(--ink); }
+.menu {
+  position: absolute; top: 46px; right: 0; z-index: 5; min-width: 168px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 6px;
+  box-shadow: 0 12px 32px -8px rgba(20, 20, 50, 0.22); display: flex; flex-direction: column;
+}
+.menu button { border: none; border-radius: 10px; justify-content: flex-start; padding: 10px 12px; background: transparent; width: 100%; }
+.menu button:hover { background: var(--accent-soft); }
+
+/* 시계 */
+.watch { width: min(330px, 86vw); max-width: 100%; aspect-ratio: 1; margin-inline: auto; position: relative; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.watch > svg, .watch > .photo { position: absolute; }
+.watch > svg { inset: 0; width: 100%; height: 100%; display: block; }
+.tick { stroke: var(--tick); stroke-width: 2.4; stroke-linecap: round; }
+.tick.major { stroke: var(--tick-major); }
+.face { fill: var(--face); }
+.face-edge { fill: none; stroke: var(--face-edge); stroke-width: 1; }
+.photo {
+  inset: 18.75%; border-radius: 50%; overflow: hidden; background: var(--face);
+  box-shadow: 0 10px 30px -14px rgba(40, 40, 90, 0.35);
+}
+.photo { display: grid; place-items: center; }
+.photo img { width: 100%; height: 100%; object-fit: cover; display: block; max-width: none; }
+.photo .initial { font-size: clamp(44px, 16vw, 64px); font-weight: 600; color: var(--tick); }
+.hand { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.hand-dot { fill: var(--accent); }
+.hand-g { filter: drop-shadow(0 1px 1.5px rgba(40, 40, 120, 0.3)); }
+
+.dots { display: flex; gap: 10px; justify-content: center; min-height: 10px; }
+.dots button { width: 8px; height: 8px; padding: 0; border: none; border-radius: 50%; background: var(--tick); }
+.dots button[aria-current="true"] { background: var(--muted); }
+.dots button:hover { background: var(--accent); }
+
+.identity { text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.identity h1 { font-family: var(--font-display); font-weight: 700; font-size: 26px; line-height: 1.25; margin: 0; text-wrap: balance; }
+.identity p { margin: 0; color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
+.identity p b { color: var(--accent); font-weight: 600; }
+
+.notice {
+  border: 1px dashed var(--accent); border-radius: var(--radius); padding: 12px 14px; background: color-mix(in srgb, var(--surface) 60%, transparent);
+  font-size: 13.5px; color: var(--muted); display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+}
+.notice strong { color: var(--ink); font-weight: 600; }
+
+.ledger {
+  font-size: 13.5px; color: var(--muted); display: flex; flex-direction: column; gap: 8px;
+  background: color-mix(in srgb, var(--surface) 75%, transparent); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 16px 18px;
+}
+.ledger div { display: flex; justify-content: space-between; gap: 12px; }
+.ledger span:last-child { color: var(--ink); font-variant-numeric: tabular-nums; text-align: right; }
+.ledger .mono { font-family: var(--font-mono); font-size: 12.5px; }
+.ledger .mono b { color: var(--accent); font-weight: 500; }
+.bar { height: 4px; border-radius: 4px; background: var(--tick); overflow: hidden; margin-top: 6px; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; min-width: 4px; }
+
+/* 편집/백업 패널 */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 18px; display: flex; flex-direction: column; gap: 16px; }
+.panel h2 { font-size: 21px; font-weight: 700; margin: 0; }
+.panel p.help { margin: -8px 0 0; color: var(--muted); font-size: 13px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: 13px; font-weight: 500; }
+.field .hint { font-size: 12px; color: var(--muted); }
+input[type="text"], input[type="date"], textarea {
+  font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 10px; padding: 11px 12px; width: 100%; min-width: 0; -webkit-appearance: none; appearance: none;
+}
+input[type="date"] { min-height: 46px; }
+textarea { font-family: var(--font-mono); font-size: 12px; min-height: 110px; resize: vertical; }
+.photo-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.thumb { width: 64px; height: 64px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); overflow: hidden; flex: none; display: grid; place-items: center; color: var(--muted); font-size: 11px; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; max-width: none; }
+.file-btn { position: relative; overflow: hidden; }
+.file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.error { color: var(--warn); font-size: 13px; margin: 0; }
+.row-end { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.row-split { display: flex; gap: 8px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.btn-danger { background: transparent; color: var(--warn); border-color: transparent; }
+.btn-danger:hover { border-color: var(--warn); }
+.btn-danger.armed { background: var(--warn); color: var(--surface); border-color: var(--warn); }
+fieldset { border: none; margin: 0; padding: 0; min-width: 0; }
+legend { font-size: 13px; font-weight: 500; padding: 0; margin-bottom: 6px; }
+.opts { display: flex; flex-direction: column; gap: 8px; }
+.opt { border: 1px solid var(--line); border-radius: 12px; background: var(--bg); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.opt.on { border-color: var(--accent); background: var(--accent-soft); }
+.opt > label { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.opt input[type="radio"] { accent-color: var(--accent); width: 18px; height: 18px; margin: 2px 0 0; flex: none; }
+.opt .t { display: flex; flex-direction: column; line-height: 1.4; }
+.opt .t b { font-weight: 600; font-size: 14px; }
+.opt .t small { color: var(--muted); font-size: 12px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.seg label { position: relative; text-align: center; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 4px; font-size: 13px; cursor: pointer; line-height: 1.35; }
+.seg label small { display: block; color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.seg input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.seg label:has(input:checked) { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.seg label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.age-row { display: flex; align-items: center; gap: 8px; }
+.age-row input { max-width: 120px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.reunion-hint { font-size: 13px; color: var(--muted); }
+.reunion-hint b { color: var(--accent); font-weight: 600; }
+.toast { font-size: 13px; color: var(--accent); min-height: 1.4em; margin: 0; }
+.foot { text-align: center; font-size: 12px; color: var(--muted); margin: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .watch.swap { animation: swap .28s ease; }
+  @keyframes swap { from { opacity: .4; transform: scale(.97); } to { opacity: 1; transform: none; } }
+}
+</style>
+
+</head>
+<body>
+<div class="app">
+  <!-- 메인 화면 -->
+  <section id="view-main" class="stack">
+    <div class="top">
+      <button type="button" class="kebab" id="btn-menu" aria-label="메뉴" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+      </button>
+      <div class="menu" id="menu" role="menu" hidden>
+        <button type="button" role="menuitem" id="m-edit">정보 수정</button>
+        <button type="button" role="menuitem" id="m-add">아이 추가</button>
+        <button type="button" role="menuitem" id="m-backup">백업과 복원</button>
+      </div>
+    </div>
+
+    <div class="watch" id="watch" role="img" aria-label="하늘시계">
+      <svg id="dial" viewBox="0 0 320 320" aria-hidden="true"></svg>
+      <svg id="hand-layer" viewBox="0 0 320 320" aria-hidden="true">
+        <g class="hand-g" id="hand">
+          <line class="hand" x1="160" y1="160" x2="160" y2="12"/>
+        </g>
+      </svg>
+      <div class="photo" id="photo"></div>
+    </div>
+
+    <div class="dots" id="dots" aria-label="아이 선택"></div>
+
+    <div class="identity">
+      <h1 id="pet-name">콩이</h1>
+      <p id="pet-dates"></p>
+    </div>
+
+    <div class="notice" id="sample-notice" hidden>
+      <span><strong>예시 화면입니다.</strong> 우리 아이의 정보와 사진을 넣으면 이 기기에만 저장됩니다.</span>
+      <button type="button" class="btn-primary" id="btn-start">시작하기</button>
+    </div>
+    <div class="notice" id="storage-notice" hidden>
+      <span><strong>이 브라우저에서는 저장이 되지 않습니다.</strong> 창을 닫으면 입력한 정보가 사라집니다.</span>
+    </div>
+
+    <div class="ledger">
+      <div><span>무지개 다리 건넌 지</span><span id="days">—</span></div>
+      <div><span>천국의 1초는</span><span id="per-sec">—</span></div>
+      <div><span>다시 만나는 날</span><span id="reunion">—</span></div>
+      <div><span>1시간 중</span><span id="pct">—</span></div>
+      <div class="bar"><i id="bar"></i></div>
+    </div>
+
+    <div class="notice" id="install-notice" hidden>
+      <span><strong>홈 화면에 추가해 주세요.</strong> Safari 아래쪽 공유 버튼 → ‘홈 화면에 추가’로 설치하면 앱처럼 열리고 기록이 안전하게 보관됩니다.</span>
+    </div>
+
+    <p class="foot">바늘이 한 바퀴를 다 돌면, 다시 만나는 날이에요.</p>
+  </section>
+
+  <!-- 정보 입력 -->
+  <section id="view-edit" class="panel" hidden>
+    <h2 id="f-title">우리 아이 정보</h2>
+    <p class="help">입력한 내용과 사진은 이 기기에만 저장됩니다.</p>
+    <form id="form" novalidate style="display:flex;flex-direction:column;gap:16px">
+      <div class="field">
+        <label for="f-name">이름</label>
+        <input type="text" id="f-name" maxlength="20" placeholder="예: 콩이" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="f-death">무지개 다리를 건넌 날</label>
+        <input type="date" id="f-death">
+      </div>
+      <div class="field">
+        <label for="f-birth">보호자 생년월일</label>
+        <input type="date" id="f-birth">
+      </div>
+      <fieldset class="field">
+        <legend>다시 만나는 날 계산</legend>
+        <div class="opts">
+          <div class="opt" id="opt-stat">
+            <label for="f-life-stat"><input type="radio" name="life" id="f-life-stat" value="stat"><span class="t"><b>통계청 기대수명으로</b><small>2024년 생명표 기준, 보호자가 기대수명에 이르는 날</small></span></label>
+            <div class="seg" id="f-sex-box" role="radiogroup" aria-label="기준">
+              <label><input type="radio" name="sex" value="all" id="f-sex-all">전체<small>83.7세</small></label>
+              <label><input type="radio" name="sex" value="m" id="f-sex-m">남성<small>80.8세</small></label>
+              <label><input type="radio" name="sex" value="f" id="f-sex-f">여성<small>86.6세</small></label>
+            </div>
+          </div>
+          <div class="opt" id="opt-custom">
+            <label for="f-life-custom"><input type="radio" name="life" id="f-life-custom" value="custom"><span class="t"><b>직접 나이 입력</b><small>보호자가 이 나이가 되는 날</small></span></label>
+            <div class="age-row" id="f-age-box">
+              <input type="number" id="f-age" inputmode="numeric" min="1" max="150" step="1" placeholder="예: 100" aria-label="나이"><span>세</span>
+            </div>
+          </div>
+        </div>
+        <span class="reunion-hint" id="f-reunion-hint"></span>
+      </fieldset>
+      <div class="field">
+        <label for="f-photo">시계 가운데 들어갈 사진</label>
+        <div class="photo-row">
+          <div class="thumb" id="f-thumb">없음</div>
+          <label class="btn file-btn">사진 고르기<input type="file" id="f-photo" accept="image/*"></label>
+          <button type="button" id="f-photo-clear" class="btn-ghost" hidden>지우기</button>
+        </div>
+        <span class="hint">정사각형에 가깝게 가운데를 잘라 원 안에 맞춥니다.</span>
+      </div>
+      <p class="error" id="f-error" hidden></p>
+      <div class="row-split">
+        <button type="button" id="f-delete" class="btn-danger" hidden>이 아이 삭제</button>
+        <div class="row-end" style="margin-left:auto">
+          <button type="button" id="f-cancel" class="btn-ghost">취소</button>
+          <button type="submit" class="btn-primary">저장</button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <!-- 백업 -->
+  <section id="view-backup" class="panel" hidden>
+    <h2>백업과 복원</h2>
+    <p class="help">앱을 지우거나 기기를 바꾸면 기록이 사라집니다. 등록한 모든 아이가 한 번에 백업됩니다. 복원하면 지금 목록에 합쳐지고, 같은 아이는 백업 내용으로 바뀝니다.</p>
+    <div class="row-end" style="justify-content:flex-start">
+      <button type="button" id="b-save">백업 파일 저장</button>
+      <button type="button" id="b-copy">백업 코드 복사</button>
+    </div>
+    <div class="field">
+      <label for="b-text">복원하기</label>
+      <textarea id="b-text" placeholder="백업 코드를 붙여넣거나 아래에서 백업 파일을 선택하세요."></textarea>
+    </div>
+    <div class="row-end" style="justify-content:flex-start">
+      <label class="btn file-btn">백업 파일 선택<input type="file" id="b-file" accept="application/json,.json,.txt"></label>
+      <button type="button" id="b-restore" class="btn-primary">복원</button>
+    </div>
+    <p class="toast" id="b-toast"></p>
+    <div class="row-end"><button type="button" id="b-close" class="btn-ghost">닫기</button></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const KEY = "heaven-clock:v1";
+  const HEAVEN_SEC = 3600;
+  const DAY = 86400000;
+  const SAMPLE_PET = { id: "sample", petName: "콩이", death: "2025-03-14", birth: "1990-05-20", photo: null, lifeMode: "stat", statSex: "all", lifeAge: null };
+  // 통계청(현 국가데이터처) 2024년 생명표, 출생아 기대수명 (2025.12.3. 발표)
+  const LIFE = { all: 83.7, m: 80.8, f: 86.6 };
+  const SEX_LABEL = { all: "전체", m: "남성", f: "여성" };
+  const $ = id => document.getElementById(id);
+
+  // ---------- 날짜/계산 ----------
+  function parseDate(s) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s || "")) return null;
+    const [y, m, d] = s.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    return isNaN(dt) ? null : dt;
+  }
+  function lifeYears(p) {
+    if (p.lifeMode === "stat") return LIFE[p.statSex] || LIFE.all;
+    const n = Number(p.lifeAge);
+    return isFinite(n) && n > 0 ? n : null;
+  }
+  function lifeLabel(p) {
+    return p.lifeMode === "stat" ? `기대수명 ${LIFE[p.statSex] || LIFE.all}세` : `${Number(p.lifeAge)}세`;
+  }
+  // 보호자 생일 + 나이(소수점은 일수로 환산)
+  function reunionDate(p) {
+    const b = parseDate(p.birth), years = lifeYears(p);
+    if (!b || !years) return null;
+    const whole = Math.floor(years);
+    let d = new Date(b.getFullYear() + whole, b.getMonth(), b.getDate());
+    const frac = years - whole;
+    if (frac > 0) { d = new Date(d.getTime() + frac * 365.2425 * DAY); d = new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+    return d;
+  }
+  function compute(p, now) {
+    const death = parseDate(p.death), end = reunionDate(p);
+    if (!death || !end) return null;
+    const span = end - death;
+    if (span <= 0) return null;
+    const ratio = Math.min(Math.max((now - death) / span, 0), 1);
+    const elapsed = ratio * HEAVEN_SEC;
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return {
+      ratio, elapsed, remain: HEAVEN_SEC - elapsed,
+      days: Math.max(0, Math.round((today - death) / DAY)),
+      perSecDays: span / HEAVEN_SEC / DAY,
+      end, death
+    };
+  }
+  // strict: 입력 저장 시 검사. 저장된 기록을 불러올 때는 날짜 흐름에 따른 검사를 생략한다.
+  function validate(d, strict = true) {
+    if (!d) return "내용이 없습니다.";
+    const death = parseDate(d.death), birth = parseDate(d.birth);
+    if (!d.petName) return "이름을 입력해 주세요.";
+    if (!death) return "무지개 다리를 건넌 날을 입력해 주세요.";
+    if (!birth) return "보호자 생년월일을 입력해 주세요.";
+    if (strict && death > new Date()) return "무지개 다리를 건넌 날은 오늘 이전이어야 합니다.";
+    if (birth >= death) return "보호자 생년월일은 무지개 다리를 건넌 날보다 앞서야 합니다.";
+    if (d.lifeMode === "custom") {
+      const n = Number(d.lifeAge);
+      if (!d.lifeAge && d.lifeAge !== 0 || !isFinite(n)) return "다시 만나는 나이를 입력해 주세요.";
+      if (n < 1 || n > 150) return "나이는 1세에서 150세 사이로 입력해 주세요.";
+    }
+    const end = reunionDate(d);
+    if (!end || end <= death) return "다시 만나는 날이 무지개 다리를 건넌 날보다 앞섭니다. 나이를 확인해 주세요.";
+    if (strict && end <= new Date()) {
+      return d.lifeMode === "stat"
+        ? "보호자 나이가 이미 기대수명을 넘었습니다. ‘직접 나이 입력’을 선택해 주세요."
+        : "입력한 나이가 되는 날이 이미 지났습니다. 더 큰 나이를 입력해 주세요.";
+    }
+    return null;
+  }
+  window.__heaven = { compute };
+
+  // ---------- 저장 (여러 아이) ----------
+  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  // 예전 기록(계산 방식 없음)은 기존과 같은 120세로 유지
+  function clean(p) {
+    const stat = p.lifeMode === "stat";
+    return {
+      id: p.id || newId(), petName: String(p.petName || "").slice(0, 20), death: p.death, birth: p.birth,
+      photo: typeof p.photo === "string" ? p.photo : null,
+      lifeMode: stat ? "stat" : "custom",
+      statSex: ["all", "m", "f"].includes(p.statSex) ? p.statSex : "all",
+      lifeAge: stat ? null : (p.lifeMode === "custom" ? Number(p.lifeAge) : 120)
+    };
+  }
+  function normalize(obj) {
+    if (!obj || typeof obj !== "object") return null;
+    let list = [];
+    if (Array.isArray(obj.pets)) list = obj.pets;
+    else if (obj.petName) list = [obj];
+    const pets = list.filter(p => p).map(clean).filter(p => !validate(p, false));
+    if (!pets.length) return null;
+    const activeId = pets.some(p => p.id === obj.activeId) ? obj.activeId : pets[0].id;
+    return { pets, activeId };
+  }
+  let state = { pets: [], activeId: null };
+  let memory = null;
+  let storageOk = true;
+  function load() {
+    try { const s = localStorage.getItem(KEY); return s ? normalize(JSON.parse(s)) : null; }
+    catch (e) { storageOk = false; return memory; }
+  }
+  function persist(next) {
+    memory = next;
+    try { localStorage.setItem(KEY, JSON.stringify({ v: 2, pets: next.pets, activeId: next.activeId })); storageOk = true; return "ok"; }
+    catch (e) {
+      const quota = e && (e.name === "QuotaExceededError" || e.code === 22);
+      if (!quota) storageOk = false;
+      return quota ? "quota" : "blocked";
+    }
+  }
+  const isSample = () => state.pets.length === 0;
+  const active = () => isSample() ? SAMPLE_PET : (state.pets.find(p => p.id === state.activeId) || state.pets[0]);
+
+  // ---------- 표시 형식 ----------
+  const pad2 = n => String(n).padStart(2, "0");
+  const fmtDate = d => `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
+  const fmtMinSec = sec => { const s = Math.floor(sec); return `${Math.floor(s / 60)}분 ${pad2(s % 60)}초`; };
+  // 스톱워치 형식 MM:SS.cc
+  function fmtStopwatch(sec) {
+    const cs = Math.floor(sec * 100);
+    const m = Math.floor(cs / 6000), s = Math.floor((cs % 6000) / 100), c = cs % 100;
+    return `${pad2(m)}:${pad2(s)}.${pad2(c)}`;
+  }
+
+  // ---------- 시계 문자판 ----------
+  const NS = "http://www.w3.org/2000/svg";
+  (function buildDial() {
+    const svg = $("dial");
+    let out = `<circle class="face" cx="160" cy="160" r="100"/><circle class="face-edge" cx="160" cy="160" r="100"/>`;
+    for (let i = 0; i < 60; i++) {
+      const a = i * 6 * Math.PI / 180, s = Math.sin(a), c = -Math.cos(a);
+      const r1 = 136, r2 = 148;
+      out += `<line class="tick${i % 5 === 0 ? " major" : ""}" x1="${(160 + r1 * s).toFixed(2)}" y1="${(160 + r1 * c).toFixed(2)}" x2="${(160 + r2 * s).toFixed(2)}" y2="${(160 + r2 * c).toFixed(2)}"/>`;
+    }
+    svg.innerHTML = out;
+  })();
+  function setHand(ratio) {
+    $("hand").setAttribute("transform", `rotate(${(ratio * 360).toFixed(4)} 160 160)`);
+  }
+
+  // ---------- 메인 렌더 ----------
+  function renderDots() {
+    const box = $("dots");
+    box.textContent = "";
+    if (state.pets.length < 2) return;
+    const cur = active();
+    state.pets.forEach(p => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("aria-label", p.petName);
+      b.setAttribute("aria-current", String(p.id === cur.id));
+      b.addEventListener("click", () => selectPet(p.id));
+      box.appendChild(b);
+    });
+  }
+  function renderStatic() {
+    const p = active();
+    $("pet-name").textContent = p.petName;
+    const photo = $("photo");
+    photo.textContent = "";
+    if (p.photo) { const img = new Image(); img.src = p.photo; img.alt = ""; photo.appendChild(img); }
+    else { const s = document.createElement("span"); s.className = "initial"; s.textContent = (p.petName || "?").slice(0, 1); photo.appendChild(s); }
+    $("watch").setAttribute("aria-label", `${p.petName}의 하늘시계`);
+    $("sample-notice").hidden = !isSample();
+    $("storage-notice").hidden = storageOk || isSample();
+    $("m-edit").textContent = isSample() ? "시작하기" : "정보 수정";
+    $("m-add").hidden = isSample();
+    $("m-backup").hidden = isSample();
+    renderDots();
+  }
+  function tick() {
+    const r = compute(active(), new Date());
+    if (!r) return;
+    const ws = Math.floor(r.elapsed), wm = Math.floor(ws / 60);
+    $("pet-dates").innerHTML = `천국에서 <b>${wm ? wm + "분 " : ""}${ws % 60}초</b> 지났어요`;
+    $("days").textContent = `${r.days.toLocaleString("ko-KR")}일 (${fmtDate(r.death)})`;
+    $("per-sec").textContent = `지구의 약 ${r.perSecDays.toFixed(1)}일`;
+    $("reunion").textContent = `${fmtDate(r.end)} (${lifeLabel(active())})`;
+    $("pct").textContent = `${(r.ratio * 100).toFixed(4)}%`;
+    $("bar").style.width = `${Math.max(r.ratio * 100, 0.5)}%`;
+    setHand(r.ratio);
+  }
+  function refresh() { renderStatic(); tick(); }
+  function selectPet(id) {
+    if (state.activeId === id) return;
+    state = { ...state, activeId: id };
+    persist(state);
+    const w = $("watch"); w.classList.remove("swap"); void w.offsetWidth; w.classList.add("swap");
+    refresh();
+  }
+  function step(dir) {
+    if (state.pets.length < 2) return;
+    const i = state.pets.findIndex(p => p.id === active().id);
+    const n = state.pets.length;
+    selectPet(state.pets[(i + dir + n) % n].id);
+  }
+  // 시계를 좌우로 밀어 아이 전환
+  (function swipe() {
+    let x0 = null, y0 = null;
+    const w = $("watch");
+    w.addEventListener("pointerdown", e => { x0 = e.clientX; y0 = e.clientY; });
+    w.addEventListener("pointerup", e => {
+      if (x0 === null) return;
+      const dx = e.clientX - x0, dy = e.clientY - y0;
+      x0 = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) step(dx < 0 ? 1 : -1);
+    });
+    w.addEventListener("pointercancel", () => { x0 = null; });
+  })();
+
+  // ---------- 메뉴 ----------
+  function closeMenu() { $("menu").hidden = true; $("btn-menu").setAttribute("aria-expanded", "false"); }
+  $("btn-menu").addEventListener("click", e => {
+    e.stopPropagation();
+    const open = $("menu").hidden;
+    $("menu").hidden = !open;
+    $("btn-menu").setAttribute("aria-expanded", String(open));
+  });
+  document.addEventListener("click", e => { if (!$("menu").hidden && !$("menu").contains(e.target)) closeMenu(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
+
+  // ---------- 화면 전환 ----------
+  function show(view) {
+    closeMenu();
+    ["main", "edit", "backup"].forEach(v => { $("view-" + v).hidden = v !== view; });
+    window.scrollTo(0, 0);
+  }
+
+  // ---------- 정보 입력 ----------
+  let draftPhoto = null;
+  let editingId = null;
+  function setThumb(src) {
+    const t = $("f-thumb"); t.textContent = "";
+    if (src) { const img = new Image(); img.src = src; img.alt = ""; t.appendChild(img); }
+    else t.textContent = "없음";
+    $("f-photo-clear").hidden = !src;
+  }
+  function todayStr() { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+  function fillForm(p, title, canDelete) {
+    $("f-title").textContent = title;
+    $("f-name").value = p.petName || "";
+    $("f-death").value = p.death || "";
+    $("f-birth").value = p.birth || "";
+    $("f-death").max = todayStr(); $("f-birth").max = todayStr();
+    const mode = p.lifeMode === "custom" ? "custom" : "stat";
+    $("f-life-" + mode).checked = true;
+    $("f-sex-" + (["all", "m", "f"].includes(p.statSex) ? p.statSex : "all")).checked = true;
+    $("f-age").value = mode === "custom" && p.lifeAge ? p.lifeAge : "";
+    draftPhoto = p.photo || null;
+    setThumb(draftPhoto);
+    formError("");
+    disarmDelete();
+    $("f-delete").hidden = !canDelete;
+    updateLifeUI();
+    show("edit");
+  }
+  function openNew() {
+    editingId = null;
+    // 보호자 정보는 보통 같으므로 지금 보고 있는 아이의 값을 미리 채운다
+    const base = isSample() ? { birth: "", lifeMode: "stat", statSex: "all", lifeAge: null } : active();
+    fillForm({ petName: "", death: "", birth: base.birth, lifeMode: base.lifeMode, statSex: base.statSex, lifeAge: base.lifeAge, photo: null },
+      isSample() ? "우리 아이 정보" : "새로운 아이 추가", false);
+  }
+  function openEdit() {
+    if (isSample()) { openNew(); return; }
+    const p = active();
+    editingId = p.id;
+    fillForm(p, `${p.petName} 정보`, true);
+  }
+  function formData() {
+    const mode = $("f-life-custom").checked ? "custom" : "stat";
+    const sex = (document.querySelector('input[name="sex"]:checked') || {}).value || "all";
+    const age = $("f-age").value.trim();
+    return {
+      petName: $("f-name").value.trim(), death: $("f-death").value, birth: $("f-birth").value, photo: draftPhoto,
+      lifeMode: mode, statSex: sex, lifeAge: mode === "custom" ? (age === "" ? "" : Number(age)) : null
+    };
+  }
+  function updateLifeUI() {
+    const custom = $("f-life-custom").checked;
+    $("opt-stat").classList.toggle("on", !custom);
+    $("opt-custom").classList.toggle("on", custom);
+    $("f-sex-box").hidden = custom;
+    $("f-age-box").hidden = !custom;
+    const d = formData();
+    const end = parseDate(d.birth) && lifeYears(d) ? reunionDate(d) : null;
+    $("f-reunion-hint").innerHTML = end ? `다시 만나는 날: <b>${fmtDate(end)}</b>` : "";
+  }
+  ["f-birth", "f-age"].forEach(id => $(id).addEventListener("input", updateLifeUI));
+  document.querySelectorAll('input[name="life"], input[name="sex"]').forEach(el => el.addEventListener("change", () => {
+    updateLifeUI();
+    if ($("f-life-custom").checked && !$("f-age").value) $("f-age").focus();
+  }));
+
+  // 사진: 가운데를 정사각형으로 잘라 640px로 저장 (원 안에 꽉 차게)
+  function squareImage(file, size) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("read"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("decode"));
+        img.onload = () => {
+          const side = Math.min(img.width, img.height);
+          const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+          const out = Math.min(size, side);
+          const c = document.createElement("canvas");
+          c.width = out; c.height = out;
+          c.getContext("2d").drawImage(img, sx, sy, side, side, 0, 0, out, out);
+          resolve(c.toDataURL("image/jpeg", 0.84));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  function formError(msg) { $("f-error").textContent = msg; $("f-error").hidden = !msg; }
+  $("f-photo").addEventListener("change", async e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try { draftPhoto = await squareImage(file, 640); setThumb(draftPhoto); formError(""); }
+    catch (err) { formError("이 사진을 열 수 없습니다. 다른 사진을 골라 주세요."); }
+    e.target.value = "";
+  });
+  $("f-photo-clear").addEventListener("click", () => { draftPhoto = null; setThumb(null); });
+
+  $("form").addEventListener("submit", e => {
+    e.preventDefault();
+    const d = formData();
+    const err = validate(d);
+    if (err) { formError(err); return; }
+    let next;
+    if (editingId) {
+      next = { pets: state.pets.map(p => p.id === editingId ? clean({ ...d, id: editingId }) : p), activeId: editingId };
+    } else {
+      const pet = clean({ ...d, id: newId() });
+      next = { pets: [...state.pets, pet], activeId: pet.id };
+    }
+    if (persist(next) === "quota") {
+      persist(state);
+      formError("기기의 저장 공간이 부족합니다. 사진을 지우고 저장하거나, 다른 아이의 사진을 줄여 주세요.");
+      return;
+    }
+    state = next;
+    refresh(); show("main");
+  });
+
+  let armTimer = null;
+  function disarmDelete() {
+    clearTimeout(armTimer);
+    const b = $("f-delete");
+    b.classList.remove("armed"); b.textContent = "이 아이 삭제";
+  }
+  $("f-delete").addEventListener("click", () => {
+    const b = $("f-delete");
+    if (!b.classList.contains("armed")) {
+      b.classList.add("armed"); b.textContent = "한 번 더 누르면 삭제됩니다";
+      armTimer = setTimeout(disarmDelete, 4000);
+      return;
+    }
+    disarmDelete();
+    const pets = state.pets.filter(p => p.id !== editingId);
+    state = { pets, activeId: pets.length ? pets[0].id : null };
+    if (pets.length) persist(state);
+    else { memory = null; try { localStorage.removeItem(KEY); } catch (e) {} }
+    refresh(); show("main");
+  });
+  $("f-cancel").addEventListener("click", () => show("main"));
+  $("m-edit").addEventListener("click", openEdit);
+  $("m-add").addEventListener("click", openNew);
+  $("btn-start").addEventListener("click", openNew);
+
+  // ---------- 백업 ----------
+  const backupText = () => JSON.stringify({ app: "heaven-clock", v: 2, pets: state.pets, activeId: state.activeId });
+  function toast(msg) { $("b-toast").textContent = msg; }
+  $("m-backup").addEventListener("click", () => {
+    toast(`${state.pets.length}마리의 기록이 백업됩니다.`); $("b-text").value = ""; show("backup");
+  });
+  $("b-close").addEventListener("click", () => show("main"));
+  $("b-save").addEventListener("click", async () => {
+    const name = `하늘시계-백업-${todayStr()}.json`;
+    const blob = new Blob([backupText()], { type: "application/json" });
+    try {
+      const file = new File([blob], name, { type: "application/json" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: name });
+        toast("백업 파일을 내보냈습니다."); return;
+      }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast("저장 창이 뜨지 않으면 ‘백업 코드 복사’를 이용해 메모 앱에 붙여넣어 보관하세요.");
+  });
+  $("b-copy").addEventListener("click", () => {
+    const text = backupText();
+    const fallback = () => { const t = $("b-text"); t.value = text; t.focus(); t.select(); toast("자동 복사가 막혀 있어 아래 칸에 코드를 넣었습니다. 전체 선택 후 복사하세요."); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => toast("백업 코드를 복사했습니다. 메모 앱 등에 붙여넣어 보관하세요."), fallback);
+    } else fallback();
+  });
+  $("b-file").addEventListener("change", e => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { $("b-text").value = r.result; toast("파일을 불러왔습니다. ‘복원’을 눌러 적용하세요."); };
+    r.readAsText(f); e.target.value = "";
+  });
+  $("b-restore").addEventListener("click", () => {
+    let obj;
+    try { obj = JSON.parse($("b-text").value.trim()); } catch (e) { toast("백업 코드 형식이 올바르지 않습니다. 복사한 내용 전체를 붙여넣었는지 확인해 주세요."); return; }
+    if (!obj || obj.app !== "heaven-clock") { toast("하늘시계 백업이 아닙니다."); return; }
+    const incoming = normalize(obj.pets ? obj : obj.data);
+    if (!incoming) { toast("백업 내용이 손상되었거나 비어 있습니다."); return; }
+    const byId = new Map(state.pets.map(p => [p.id, p]));
+    incoming.pets.forEach(p => byId.set(p.id, p));
+    const next = { pets: [...byId.values()], activeId: incoming.activeId };
+    if (persist(next) === "quota") { persist(state); toast("기기의 저장 공간이 부족해 복원하지 못했습니다."); return; }
+    state = next;
+    refresh(); show("main");
+  });
+
+  // ---------- 설치 안내 / 오프라인 ----------
+  const inFrame = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const standalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+  $("install-notice").hidden = inFrame || !isIOS || standalone;
+  if (!inFrame && "serviceWorker" in navigator && location.protocol === "https:") {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+
+  // ---------- 시작 ----------
+  const saved = load();
+  if (saved) { state = saved; persist(state); }
+  refresh();
+  setInterval(tick, 250);
+})();
+</script>
+</body>
+</html>
