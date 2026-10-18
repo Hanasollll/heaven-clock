@@ -253,7 +253,6 @@ legend { font-size: 13px; font-weight: 500; padding: 0; margin-bottom: 6px; }
       <span><strong>홈 화면에 추가해 주세요.</strong> Safari 아래쪽 공유 버튼 → ‘홈 화면에 추가’로 설치하면 앱처럼 열리고 기록이 안전하게 보관됩니다.</span>
     </div>
 
-    <p class="foot">바늘이 한 바퀴를 다 돌면, 다시 만나는 날이에요.</p>
   </section>
 
   <!-- 정보 입력 -->
@@ -359,7 +358,7 @@ legend { font-size: 13px; font-weight: 500; padding: 0; margin-bottom: 6px; }
     return isFinite(n) && n > 0 ? n : null;
   }
   function lifeLabel(p) {
-    return p.lifeMode === "stat" ? `기대수명 ${LIFE[p.statSex] || LIFE.all}세` : `${Number(p.lifeAge)}세`;
+    return p.lifeMode === "stat" ? `${LIFE[p.statSex] || LIFE.all}세` : `${Number(p.lifeAge)}세`;
   }
   // 보호자 생일 + 나이(소수점은 일수로 환산)
   function reunionDate(p) {

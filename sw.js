@@ -1,5 +1,5 @@
 // 하늘시계 오프라인 캐시. 파일을 수정해 다시 올릴 때는 VERSION 숫자를 올려 주세요.
-const VERSION = "heaven-clock-v7";
+const VERSION = "heaven-clock-v8";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
